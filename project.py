@@ -1,5 +1,6 @@
 import sqlite3
 from tkinter import Tk, Label, Entry, Button
+from tkinter.ttk import Treeview
 
 # Функция для добавления книги в базу данных
 def add_book(title, author, year):
@@ -11,15 +12,62 @@ def add_book(title, author, year):
     conn.commit()
     conn.close()
 
+# Функция для получения данных из базы данных
+def view_books():
+    conn = sqlite3.connect('library_catalog.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM books')
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
 # Функция, вызываемая при нажатии кнопки
 def on_submit():
     add_book(title_entry.get(), author_entry.get(), year_entry.get())
+    # Обновляем таблицу
+    update_treeview()
+
+# Функция для обновления данных в Treeview
+def update_treeview():
+    # Очищаем таблицу
+    for row in tree.get_children():
+        tree.delete(row)
+    # Вставляем новые данные
+    for row in view_books():
+        tree.insert('', 'end', values=row)
+
+def remove_column(column_name):
+    # Подключаемся к базе данных
+    conn = sqlite3.connect('library_catalog.db')
+    cursor = conn.cursor()
+    
+    # Получаем список столбцов
+    cursor.execute('PRAGMA table_info(books)')
+    columns = [info[1] for info in cursor.fetchall() if info[1] != column_name]
+    
+    # Создаем новую таблицу с оставшимися столбцами
+    cursor.execute(f'''
+        CREATE TABLE books_new ({', '.join(columns)})
+    ''')
+    
+    # Копируем данные в новую таблицу
+    cursor.execute(f'''
+        INSERT INTO books_new SELECT {', '.join(columns)} FROM books
+    ''')
+    
+    # Удаляем старую таблицу и переименовываем новую
+    cursor.execute('DROP TABLE books')
+    cursor.execute('ALTER TABLE books_new RENAME TO books')
+    
+    # Сохраняем изменения и закрываем соединение
+    conn.commit()
+    conn.close()
 
 # Создаем главное окно
 root = Tk()
 root.title('Библиотечный каталог')
 
-# Создаем виджеты
+# Создаем виджеты для ввода данных
 title_label = Label(root, text='Название:')
 title_entry = Entry(root)
 author_label = Label(root, text='Автор:')
@@ -27,6 +75,13 @@ author_entry = Entry(root)
 year_label = Label(root, text='Год издания:')
 year_entry = Entry(root)
 submit_button = Button(root, text='Добавить', command=on_submit)
+
+# Создаем Treeview для отображения данных
+tree = Treeview(root, columns=('ID', 'Title', 'Author', 'Year'), show='headings')
+tree.heading('ID', text='ID')
+tree.heading('Title', text='Название')
+tree.heading('Author', text='Автор')
+tree.heading('Year', text='Год издания')
 
 # Располагаем виджеты
 title_label.grid(row=0, column=0)
@@ -36,36 +91,7 @@ author_entry.grid(row=1, column=1)
 year_label.grid(row=2, column=0)
 year_entry.grid(row=2, column=1)
 submit_button.grid(row=3, column=1)
+tree.grid(row=4, column=0, columnspan=2)
 
 # Запускаем главный цикл
 root.mainloop()
-
-# Создаем соединение с базой данных
-conn = sqlite3.connect('library_catalog.db')
-
-# Создаем курсор для работы с базой данных
-cursor = conn.cursor()
-
-# Создаем таблицу для книг
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS books (
-        id INTEGER PRIMARY KEY,
-        title TEXT,
-        author TEXT,
-        year INTEGER
-    )
-''')
-
-# Вставляем пример данных в таблицу
-cursor.execute('''
-    INSERT INTO books (title, author, year) VALUES
-    ('Преступление и наказание', 'Федор Достоевский', 1866),
-    ('Война и мир', 'Лев Толстой', 1869),
-    ('1984', 'Джордж Оруэлл', 1949)
-''')
-
-# Сохраняем изменения
-conn.commit()
-
-# Закрываем соединение
-conn.close()
