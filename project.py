@@ -1,5 +1,5 @@
 import sqlite3
-from tkinter import Tk, Label, Entry, Button, messagebox
+from tkinter import Tk, Label, Entry, Button, messagebox, simpledialog
 from tkinter.ttk import Treeview
 
 # Функция для добавления книги в базу данных
@@ -33,6 +33,39 @@ def delete_book(book_id):
             cursor.execute('DELETE FROM books WHERE id = ?', (book_id,))
     except sqlite3.Error as e:
         messagebox.showerror("Ошибка базы данных", e)
+
+def on_delete():
+    column_name = simpledialog.askstring("Удаление столбца", "Введите имя столбца для удаления:")
+    if column_name:  # Проверяем, что пользователь ввел имя столбца
+        remove_column(column_name)
+        update_treeview_headers()  # Обновляем заголовки в Treeview
+        update_treeview()  # Обновляем данные в Treeview
+
+# Функция для обновления заголовков в Treeview
+def update_treeview_headers():
+    tree['columns'] = get_column_names()
+    for col in tree['columns']:
+        tree.heading(col, text=col.capitalize())
+
+# Функция для получения списка имен столбцов
+def get_column_names():
+    with sqlite3.connect('library_catalog.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('PRAGMA table_info(books)')
+        return [info[1] for info in cursor.fetchall()]
+
+# Улучшенная функция для удаления столбца
+def remove_column(column_name):
+    with sqlite3.connect('library_catalog.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('PRAGMA table_info(books)')
+        columns = [info[1] for info in cursor.fetchall() if info[1] != column_name]
+        if len(columns) == len(cursor.fetchall()):  # Если столбец не найден, выходим из функции
+            messagebox.showerror("Ошибка", f"Столбец '{column_name}' не найден.")
+            return
+        cursor.execute(f'CREATE TABLE books_temp AS SELECT {", ".join(columns)} FROM books')
+        cursor.execute('DROP TABLE books')
+        cursor.execute('ALTER TABLE books_temp RENAME TO books')
 
 # Функция для обновления данных в Treeview
 def update_treeview():
@@ -74,6 +107,7 @@ author_entry = Entry(root)
 year_label = Label(root, text='Год издания:')
 year_entry = Entry(root)
 submit_button = Button(root, text='Добавить', command=on_submit)
+delete_button = Button(root, text='Удалить', command=on_delete)
 
 # Создаем Treeview для отображения данных
 tree = Treeview(root, columns=('ID', 'Title', 'Author', 'Year'), show='headings')
@@ -90,6 +124,7 @@ author_entry.grid(row=1, column=1)
 year_label.grid(row=2, column=0)
 year_entry.grid(row=2, column=1)
 submit_button.grid(row=3, column=1)
+delete_button.grid(row=3, column=0)
 tree.grid(row=4, column=0, columnspan=2)
 
 # Запускаем главный цикл
