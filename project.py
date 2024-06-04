@@ -1,25 +1,59 @@
 import sqlite3
-from tkinter import Tk, Label, Entry, Button
+from tkinter import Tk, Label, Entry, Button, messagebox
 from tkinter.ttk import Treeview
 
 # Функция для добавления книги в базу данных
 def add_book(title, author, year):
-    conn = sqlite3.connect('library_catalog.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO books (title, author, year) VALUES (?, ?, ?)
-    ''', (title, author, year))
-    conn.commit()
-    conn.close()
+    try:
+        with sqlite3.connect('library_catalog.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO books (title, author, year) VALUES (?, ?, ?)
+            ''', (title, author, year))
+    except sqlite3.Error as e:
+        messagebox.showerror("Ошибка базы данных", e)
 
 # Функция для получения данных из базы данных
 def view_books():
-    conn = sqlite3.connect('library_catalog.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM books')
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
+    try:
+        with sqlite3.connect('library_catalog.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM books')
+            rows = cursor.fetchall()
+            return rows
+    except sqlite3.Error as e:
+        messagebox.showerror("Ошибка базы данных", e)
+        return []
+
+# Функция для удаления книги по ID
+def delete_book(book_id):
+    try:
+        with sqlite3.connect('library_catalog.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM books WHERE id = ?', (book_id,))
+    except sqlite3.Error as e:
+        messagebox.showerror("Ошибка базы данных", e)
+
+# Функция для обновления данных в Treeview
+def update_treeview():
+    for row in tree.get_children():
+        tree.delete(row)
+    for row in view_books():
+        tree.insert('', 'end', values=row)
+
+# Функция для удаления столбца
+def remove_column(column_name):
+    try:
+        with sqlite3.connect('library_catalog.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('PRAGMA table_info(books)')
+            columns = [info[1] for info in cursor.fetchall() if info[1] != column_name]
+            cursor.execute(f'CREATE TABLE books_new ({", ".join(columns)})')
+            cursor.execute(f'INSERT INTO books_new SELECT {", ".join(columns)} FROM books')
+            cursor.execute('DROP TABLE books')
+            cursor.execute('ALTER TABLE books_new RENAME TO books')
+    except sqlite3.Error as e:
+        messagebox.showerror("Ошибка базы данных", e)
 
 # Функция, вызываемая при нажатии кнопки
 def on_submit():
@@ -27,41 +61,6 @@ def on_submit():
     # Обновляем таблицу
     update_treeview()
 
-# Функция для обновления данных в Treeview
-def update_treeview():
-    # Очищаем таблицу
-    for row in tree.get_children():
-        tree.delete(row)
-    # Вставляем новые данные
-    for row in view_books():
-        tree.insert('', 'end', values=row)
-
-def remove_column(column_name):
-    # Подключаемся к базе данных
-    conn = sqlite3.connect('library_catalog.db')
-    cursor = conn.cursor()
-    
-    # Получаем список столбцов
-    cursor.execute('PRAGMA table_info(books)')
-    columns = [info[1] for info in cursor.fetchall() if info[1] != column_name]
-    
-    # Создаем новую таблицу с оставшимися столбцами
-    cursor.execute(f'''
-        CREATE TABLE books_new ({', '.join(columns)})
-    ''')
-    
-    # Копируем данные в новую таблицу
-    cursor.execute(f'''
-        INSERT INTO books_new SELECT {', '.join(columns)} FROM books
-    ''')
-    
-    # Удаляем старую таблицу и переименовываем новую
-    cursor.execute('DROP TABLE books')
-    cursor.execute('ALTER TABLE books_new RENAME TO books')
-    
-    # Сохраняем изменения и закрываем соединение
-    conn.commit()
-    conn.close()
 
 # Создаем главное окно
 root = Tk()
